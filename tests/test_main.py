@@ -364,3 +364,67 @@ def test_top_level_included(user_schema_cls, user_1, user_2):
             }
         ],
     }
+
+
+def test_top_level_included_deduplication(user_schema_cls, team_1, team_2, user_1, user_2, user_3):
+    top_level_schema = user_schema_cls.get_jsonapi_top_level_schema(many=True)
+    tls = top_level_schema(context={'to_include': {'referrer'}})
+    serialized = tls.dump([user_2, user_3])
+    assert serialized == {
+        'data': [
+            {
+                'id': user_2.id,
+                'type': 'users',
+                'attributes': {
+                    'name': user_2.name,
+                    'email': user_2.email,
+                },
+                'relationships': {
+                    'referrer': {
+                        'data': {
+                            'id': user_1.id,
+                            'type': 'users',
+                        }
+                    }
+                },
+            },
+            {
+                'id': user_3.id,
+                'type': 'users',
+                'attributes': {
+                    'name': user_3.name,
+                    'email': user_3.email,
+                },
+                'relationships': {
+                    'referrer': {
+                        'data': {
+                            'id': user_1.id,
+                            'type': 'users',
+                        }
+                    },
+                    'teams': {
+                        'data': [
+                            {
+                                'id': team_1.id,
+                                'type': 'teams',
+                            },
+                            {
+                                'id': team_2.id,
+                                'type': 'teams',
+                            },
+                        ]
+                    }
+                },
+            },
+        ],
+        'included': [
+            {
+                'id': user_1.id,
+                'type': 'users',
+                'attributes': {
+                    'name': user_1.name,
+                    'email': user_1.email,
+                },
+            }
+        ],
+    }

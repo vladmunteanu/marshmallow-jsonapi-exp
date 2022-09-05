@@ -141,8 +141,11 @@ class JSONAPISchema(Schema):
                     # TODO support multiple errors
                     return [obj]
                 elif attr == 'included':
-                    # TODO included data and deduplication
-                    return self.context.get('included_data', default)
+                    included_data = self.context.get('included_data')
+                    if included_data:
+                        return list(included_data.values())
+                    else:
+                        return default
                 elif attr == 'meta':
                     return self.context.get('top_level_meta', default)
                 elif attr == 'jsonapi':

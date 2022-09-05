@@ -41,10 +41,14 @@ class RelationshipType(fields.String):
 
             def get_attribute(schema_self, obj, attr, default):
                 """ Overwrite to handle included data. """
-                # serializing
+                # handle included data
                 if relationship_name in schema_self.context.get('to_include', set()):
-                    included_data = schema_self.context.setdefault('included_data', [])
-                    included_data.append(related_schema_cls.get_jsonapi_resource_object_schema()().dump(obj))
+                    # serialize related object
+                    related_jsonapi_schema_cls = related_schema_cls.get_jsonapi_resource_object_schema()
+                    included_repr = related_jsonapi_schema_cls().dump(obj)
+                    # add to already included data from context
+                    included_data = schema_self.context.setdefault('included_data', {})
+                    included_data[(included_repr['type'], included_repr['id'])] = included_repr
                 if attr == 'data':
                     return obj
                 return super().get_attribute(obj, attr, default)

@@ -1,6 +1,6 @@
 import typing as t
 
-from marshmallow import Schema, SchemaOpts, fields
+from marshmallow import Schema, SchemaOpts, fields, validate
 from marshmallow.class_registry import get_class
 
 if t.TYPE_CHECKING:
@@ -37,11 +37,15 @@ class RelationshipType(fields.String):
 
     def get_jsonapi_relationship_schema(self, relationship_name: str) -> t.Type[Schema]:
         relationship = {
-            'id': fields.String(),
-            'type': fields.Constant(getattr(self.related_schema_cls, 'type', 'unknown')),
+            'id': fields.String(required=True),  # use self to preserve parameters defined on the initial schema
+            'type': fields.String(
+                dump_default=self.related_schema_cls.type,
+                required=True,
+                validate=validate.Equal(self.related_schema_cls.type, error='Invalid `type` specified'),
+            ),
         }
 
-        data_field = fields.Nested(Schema.from_dict(relationship))
+        data_field = fields.Nested(Schema.from_dict(relationship), required=True, allow_none=self.allow_none)
         if self.many:
             data_field = fields.List(data_field)
 
@@ -68,5 +72,17 @@ class RelationshipType(fields.String):
                 if attr == 'data':
                     return obj
                 return super().get_attribute(obj, attr, default)
+
+            def load(schema_self, *args, **kwargs):
+                """ Overwrite to flatten data. """
+                ret = super().load(*args, **kwargs)
+                if self.many:
+                    ret = [related_item['id'] for related_item in ret['data']]
+                else:
+                    if ret['data']:
+                        ret = ret['data'].get('id')
+                    else:
+                        ret = None
+                return ret
 
         return RelationshipSchema

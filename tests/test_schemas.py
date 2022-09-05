@@ -1,3 +1,7 @@
+import pytest
+from marshmallow import ValidationError
+
+
 def test_team_schema_jsonapi_simple(team_schema_cls, team_1):
     team_schema_cls = team_schema_cls.get_jsonapi_resource_object_schema()
     serialized = team_schema_cls().dump(team_1)
@@ -504,3 +508,64 @@ def test_top_level_included_related_to_other(user_schema_cls, team_1, team_2, us
             },
         }
     ]
+
+
+def test_top_level_schema_load_required_relationship_missing(user_schema_cls_required_fields, user_2):
+    top_level_schema = user_schema_cls_required_fields.get_jsonapi_top_level_schema()
+
+    with pytest.raises(ValidationError) as excinfo:
+        top_level_schema().load(
+            {
+                'data': {
+                    'id': user_2.id,
+                    'type': 'users',
+                    'attributes': {
+                        'name': user_2.name,
+                        'email': user_2.email,
+                    },
+                }
+            }
+        )
+    assert excinfo.value.messages == {'data': {'relationships': ['Missing data for required field.']}}
+
+    with pytest.raises(ValidationError) as excinfo:
+        top_level_schema().load(
+            {
+                'data': {
+                    'id': user_2.id,
+                    'type': 'users',
+                    'attributes': {
+                        'name': user_2.name,
+                        'email': user_2.email,
+                    },
+                    'relationships': {},
+                }
+            }
+        )
+    assert excinfo.value.messages == {'data': {'relationships': {'referrer': ['Missing data for required field.']}}}
+
+
+def test_top_level_schema_load_required_attribute_missing(user_schema_cls_required_fields, user_1, user_2):
+    top_level_schema = user_schema_cls_required_fields.get_jsonapi_top_level_schema()
+
+    with pytest.raises(ValidationError) as excinfo:
+        top_level_schema().load(
+            {
+                'data': {
+                    'id': user_2.id,
+                    'type': 'users',
+                    'attributes': {
+                        'name': user_2.name,
+                    },
+                    'relationships': {
+                        'referrer': {
+                            'data': {
+                                'id': user_1.id,
+                                'type': 'users',
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    assert excinfo.value.messages == {'data': {'attributes': {'email': ['Missing data for required field.']}}}

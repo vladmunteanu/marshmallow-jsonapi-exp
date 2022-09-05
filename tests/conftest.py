@@ -61,6 +61,24 @@ def user_schema_cls(team_schema_cls) -> t.Type[JSONAPISchema]:
 
 
 @pytest.fixture()
+def user_schema_cls_required_fields(team_schema_cls) -> t.Type[JSONAPISchema]:
+    class UserSchema(JSONAPISchema):
+        type = 'users'
+
+        id = fields.String()
+
+        # attributes
+        name = fields.String(required=True)
+        email = fields.Email(required=True)
+
+        # relationships
+        referrer = RelationshipType(related_schema='UserSchema', required=True)
+        teams = RelationshipType(related_schema=team_schema_cls, many=True)
+
+    return UserSchema
+
+
+@pytest.fixture()
 def team_1():
     return Team(id='t1', name='team-1')
 

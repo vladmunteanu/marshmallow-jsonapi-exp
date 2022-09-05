@@ -43,12 +43,21 @@ class JSONAPISchema(Schema):
         # add fields for attributes and relationships
         schema_attributes = {}
         schema_relationships = {}
+        attributes_required = False
+        relationships_required = False
         for field_name, field in schema_declared_fields.items():
             if isinstance(field, RelationshipType):
+                if field.required:
+                    relationships_required = True
                 schema_relationships[field_name] = fields.Nested(
-                    field.get_jsonapi_relationship_schema(relationship_name=field_name)
+                    field.get_jsonapi_relationship_schema(relationship_name=field_name),
+                    # pass relationship field params to preserve them
+                    allow_none=field.allow_none,
+                    required=field.required,
                 )
             else:
+                if field.required:
+                    attributes_required = True
                 schema_attributes[field_name] = field
 
         class ResourceObjectSchema(Schema):
@@ -58,8 +67,8 @@ class JSONAPISchema(Schema):
 
             id = schema_id_field
             type = schema_type_field
-            attributes = fields.Nested(Schema.from_dict(schema_attributes))
-            relationships = fields.Nested(Schema.from_dict(schema_relationships))
+            attributes = fields.Nested(Schema.from_dict(schema_attributes), required=attributes_required)
+            relationships = fields.Nested(Schema.from_dict(schema_relationships), required=relationships_required)
 
             def __init__(self, *, only=None, **kwargs):
                 new_only = [] if only else None
@@ -84,7 +93,8 @@ class JSONAPISchema(Schema):
                 ret = super().load(*args, **kwargs)
                 ret.update(**ret.pop('attributes', {}))
                 ret.pop('type', None)
-                ret.update({rel_name: rel['data']['id'] for rel_name, rel in ret.pop('relationships', {}).items()})
+                ret.update(**ret.pop('relationships', {}))
+                # ret.update({rel_name: rel['data']['id'] for rel_name, rel in ret.pop('relationships', {}).items()})
                 return ret
 
             def dump(self, *args, **kwargs):
@@ -112,17 +122,19 @@ class JSONAPISchema(Schema):
         class TopLevelSchema(Schema):
             class Meta(SchemaOpts):
                 register = False
+                # order guarantees `data` is processed before `included`,
+                # thus populating `context` with `included_data`
                 ordered = True
 
             data = fields.Nested(resource_object_schema_cls)
             if many:
-                data = fields.List(data)
-            errors = fields.List(fields.Nested(cls.error_object_schema))
-            meta = fields.Dict()
-            included = fields.List(fields.Dict())
-            jsonapi = fields.Nested(cls.jsonapi_object_schema)
+                data = fields.List(data, dump_only=True)
+            errors = fields.List(fields.Nested(cls.error_object_schema), dump_only=True)
+            meta = fields.Dict(dump_only=True)
+            included = fields.List(fields.Dict(), dump_only=True)
+            jsonapi = fields.Nested(cls.jsonapi_object_schema, dump_only=True)
             # TODO schema for links
-            links = fields.Dict(keys=fields.String(), values=fields.String())
+            links = fields.Dict(keys=fields.String(), values=fields.String(), dump_only=True)
 
             def __init__(self, *, only=None, **kwargs):
                 new_only = [] if only else None

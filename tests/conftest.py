@@ -83,3 +83,8 @@ def user_2(user_1):
 @pytest.fixture()
 def user_3(user_1, team_1, team_2):
     return User(id='u3', name='user-3', email='user-3@test.local', referrer=user_1, teams=[team_1, team_2])
+
+
+@pytest.fixture()
+def user_4(user_3):
+    return User(id='u4', name='user-4', email='user-4@test.local', referrer=user_3)

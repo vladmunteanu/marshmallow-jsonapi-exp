@@ -15,18 +15,30 @@ class RelationshipType(fields.String):
         self.related_schema = related_schema
         self.many = many
         self.id_field = id_field
+
+        self._related_schema_cls = None
+        self._related_jsonapi_schema_cls = None
         super().__init__(**kwargs)
 
-    def _get_related_schema(self) -> 'JSONAPISchema':
-        if isinstance(self.related_schema, str):
-            return get_class(self.related_schema)
-        return self.related_schema
+    @property
+    def related_schema_cls(self) -> 'JSONAPISchema':
+        if not self._related_schema_cls:
+            if isinstance(self.related_schema, str):
+                self._related_schema_cls = get_class(self.related_schema)
+            else:
+                self._related_schema_cls = self.related_schema
+        return self._related_schema_cls
+
+    @property
+    def related_jsonapi_schema_cls(self):
+        if not self._related_jsonapi_schema_cls:
+            self._related_jsonapi_schema_cls = self.related_schema_cls.get_jsonapi_resource_object_schema()
+        return self._related_jsonapi_schema_cls
 
     def get_jsonapi_relationship_schema(self, relationship_name: str) -> t.Type[Schema]:
-        related_schema_cls = self._get_related_schema()
         relationship = {
             'id': fields.String(),
-            'type': fields.Constant(getattr(related_schema_cls, 'type', 'unknown')),
+            'type': fields.Constant(getattr(self.related_schema_cls, 'type', 'unknown')),
         }
 
         data_field = fields.Nested(Schema.from_dict(relationship))
@@ -42,13 +54,17 @@ class RelationshipType(fields.String):
             def get_attribute(schema_self, obj, attr, default):
                 """ Overwrite to handle included data. """
                 # handle included data
+
                 if relationship_name in schema_self.context.get('to_include', set()):
                     # serialize related object
-                    related_jsonapi_schema_cls = related_schema_cls.get_jsonapi_resource_object_schema()
-                    included_repr = related_jsonapi_schema_cls().dump(obj)
-                    # add to already included data from context
-                    included_data = schema_self.context.setdefault('included_data', {})
-                    included_data[(included_repr['type'], included_repr['id'])] = included_repr
+                    obj_many = obj
+                    if not self.many:
+                        obj_many = [obj_many]
+                    for rel_obj in obj_many:
+                        included_repr = self.related_jsonapi_schema_cls(context=schema_self.context).dump(rel_obj)
+                        # add to already included data from context
+                        included_data = schema_self.context.setdefault('included_data', {})
+                        included_data[(included_repr['type'], included_repr['id'])] = included_repr
                 if attr == 'data':
                     return obj
                 return super().get_attribute(obj, attr, default)

@@ -428,3 +428,79 @@ def test_top_level_included_deduplication(user_schema_cls, team_1, team_2, user_
             }
         ],
     }
+
+
+def test_top_level_included_related_to_other(user_schema_cls, team_1, team_2, user_1, user_3, user_4):
+    top_level_schema = user_schema_cls.get_jsonapi_top_level_schema()
+    tls = top_level_schema(context={'to_include': {'referrer.teams'}})
+    serialized = tls.dump(user_4)
+    assert list(serialized.keys()) == ['data', 'included']
+    assert serialized['data'] == {
+                'id': user_4.id,
+                'type': 'users',
+                'attributes': {
+                    'name': user_4.name,
+                    'email': user_4.email,
+                },
+                'relationships': {
+                    'referrer': {
+                        'data': {
+                            'id': user_3.id,
+                            'type': 'users',
+                        }
+                    }
+                },
+            }
+
+    assert sorted(serialized['included'], key=lambda o: (o['type'], o['id'])) == [
+        {
+            'id': team_1.id,
+            'type': 'teams',
+            'attributes': {
+                'name': team_1.name,
+            },
+        },
+        {
+            'id': team_2.id,
+            'type': 'teams',
+            'attributes': {
+                'name': team_2.name,
+            },
+        },
+        {
+            'id': user_1.id,
+            'type': 'users',
+            'attributes': {
+                'name': user_1.name,
+                'email': user_1.email
+            }
+        },
+        {
+            'id': user_3.id,
+            'type': 'users',
+            'attributes': {
+                'name': user_3.name,
+                'email': user_3.email,
+            },
+            'relationships': {
+                'referrer': {
+                    'data': {
+                        'id': user_1.id,
+                        'type': 'users',
+                    }
+                },
+                'teams': {
+                    'data': [
+                        {
+                            'id': team_1.id,
+                            'type': 'teams',
+                        },
+                        {
+                            'id': team_2.id,
+                            'type': 'teams',
+                        },
+                    ]
+                }
+            },
+        }
+    ]

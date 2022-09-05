@@ -130,9 +130,15 @@ class JSONAPISchema(Schema):
                     for field_name in only:
                         # this will get stripped when passed to nested schemas
                         new_only.append(f'data.{field_name}')
-
                     new_only += ['errors', 'meta', 'included', 'jsonapi', 'links']
                 super().__init__(only=new_only, **kwargs)
+                # normalize all relationships to be included
+                to_include = self.context.get('to_include', set())
+                new_to_include = set()
+                for item in to_include:
+                    item_split = item.split('.')
+                    new_to_include.update(item_split)
+                self.context['to_include'] = new_to_include
 
             def get_attribute(self, obj: t.Any, attr: str, default: t.Any):
                 if attr == 'data' and not isinstance(obj, Exception):

@@ -45,7 +45,9 @@ class JSONAPISchema(Schema):
         schema_relationships = {}
         for field_name, field in schema_declared_fields.items():
             if isinstance(field, RelationshipType):
-                schema_relationships[field_name] = fields.Nested(field.get_jsonapi_relationship_schema())
+                schema_relationships[field_name] = fields.Nested(
+                    field.get_jsonapi_relationship_schema(relationship_name=field_name)
+                )
             else:
                 schema_attributes[field_name] = field
 
@@ -110,18 +112,15 @@ class JSONAPISchema(Schema):
         class TopLevelSchema(Schema):
             class Meta(SchemaOpts):
                 register = False
+                ordered = True
 
             data = fields.Nested(resource_object_schema_cls)
             if many:
                 data = fields.List(data)
             errors = fields.List(fields.Nested(cls.error_object_schema))
             meta = fields.Dict()
-
-            # this is likely wrong possible solution: use a simple list
-            included = fields.List(fields.Nested(resource_object_schema_cls))
-
+            included = fields.List(fields.Dict())
             jsonapi = fields.Nested(cls.jsonapi_object_schema)
-
             # TODO schema for links
             links = fields.Dict(keys=fields.String(), values=fields.String())
 

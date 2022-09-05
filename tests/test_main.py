@@ -330,3 +330,37 @@ def test_load_top_level_schema(user_schema_cls, user_1, user_2):
         'email': user_2.email,
         'referrer': user_1.id,
     }
+
+
+def test_top_level_included(user_schema_cls, user_1, user_2):
+    top_level_schema = user_schema_cls.get_jsonapi_top_level_schema()
+    tls = top_level_schema(context={'to_include': {'referrer'}})
+    serialized = tls.dump(user_2)
+    assert serialized == {
+        'data': {
+            'id': user_2.id,
+            'type': 'users',
+            'attributes': {
+                'name': user_2.name,
+                'email': user_2.email,
+            },
+            'relationships': {
+                'referrer': {
+                    'data': {
+                        'id': user_1.id,
+                        'type': 'users',
+                    }
+                }
+            },
+        },
+        'included': [
+            {
+                'id': user_1.id,
+                'type': 'users',
+                'attributes': {
+                    'name': user_1.name,
+                    'email': user_1.email,
+                },
+            }
+        ],
+    }

@@ -28,17 +28,40 @@ class JSONAPIObjectSchema(Schema):
     version = fields.String()
 
 
+class JSONAPISchemaOpts(SchemaOpts):
+    def __init__(self, meta, *args, **kwargs):
+        super().__init__(meta, *args, **kwargs)
+        self.type_ = getattr(meta, "type_", None)
+        self.inflect = getattr(meta, "inflect", None)
+        self.self_url = getattr(meta, "self_url", None)
+        self.self_url_kwargs = getattr(meta, "self_url_kwargs", None)
+        self.self_url_many = getattr(meta, "self_url_many", None)
+
+
 class JSONAPISchema(Schema):
     jsonapi_object_schema: t.Type[Schema] = JSONAPIObjectSchema
     error_object_schema: t.Type[Schema] = ErrorObjectSchema
-    type: str = ''
+
+    class Meta:
+        """Options object for `Schema`. Takes the same options as `marshmallow.Schema.Meta` with
+        the addition of:
+        * ``type_`` - required, the JSON API resource type as a string.
+        * ``inflect`` - optional, an inflection function to modify attribute names.
+        * ``self_url`` - optional, URL to use to `self` in links
+        * ``self_url_kwargs`` - optional, replacement fields for `self_url`.
+          String arguments enclosed in ``< >`` will be interpreted as attributes
+          to pull from the schema data.
+        * ``self_url_many`` - optional, URL to use to `self` in top-level ``links``
+          when a collection of resources is returned.
+        """
+        pass
 
     @classmethod
     def get_jsonapi_resource_object_schema(cls) -> t.Type[Schema]:
         schema_declared_fields = cls._declared_fields.copy()
         # using the id field that is defined on the schema
         schema_id_field = schema_declared_fields.pop('id')
-        schema_type_field = fields.Constant(cls.type)
+        schema_type_field = fields.Constant(cls.Meta.type_)
 
         # add fields for attributes and relationships
         schema_attributes = {}
@@ -62,7 +85,7 @@ class JSONAPISchema(Schema):
 
         class ResourceObjectSchema(Schema):
 
-            class Meta(SchemaOpts):
+            class Meta(cls.Meta):
                 register = False
 
             id = schema_id_field
@@ -113,6 +136,8 @@ class JSONAPISchema(Schema):
 
                 return ret if many else ret[0]
 
+            OPTIONS_CLASS = JSONAPISchemaOpts
+
         return ResourceObjectSchema
 
     @classmethod
@@ -120,7 +145,7 @@ class JSONAPISchema(Schema):
         resource_object_schema_cls = cls.get_jsonapi_resource_object_schema()
 
         class TopLevelSchema(Schema):
-            class Meta(SchemaOpts):
+            class Meta(cls.Meta):
                 register = False
                 # order guarantees `data` is processed before `included`,
                 # thus populating `context` with `included_data`
@@ -175,5 +200,7 @@ class JSONAPISchema(Schema):
                 ret = super().load(*args, **kwargs)
                 ret.update(**ret.pop('data', {}))
                 return ret
+
+            OPTIONS_CLASS = JSONAPISchemaOpts
 
         return TopLevelSchema

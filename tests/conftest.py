@@ -1,7 +1,7 @@
 import typing as t
 
 import pytest
-from marshmallow import class_registry, Schema, fields
+from marshmallow import class_registry, fields
 
 from mjapi.schemas import JSONAPISchema
 from mjapi.fields import RelationshipType
@@ -32,7 +32,8 @@ class User:
 @pytest.fixture()
 def team_schema_cls() -> t.Type[JSONAPISchema]:
     class TeamSchema(JSONAPISchema):
-        type = 'teams'
+        class Meta:
+            type_ = 'teams'
 
         id = fields.String()
 
@@ -45,7 +46,8 @@ def team_schema_cls() -> t.Type[JSONAPISchema]:
 @pytest.fixture()
 def user_schema_cls(team_schema_cls) -> t.Type[JSONAPISchema]:
     class UserSchema(JSONAPISchema):
-        type = 'users'
+        class Meta:
+            type_ = 'users'
 
         id = fields.String()
 
@@ -63,7 +65,8 @@ def user_schema_cls(team_schema_cls) -> t.Type[JSONAPISchema]:
 @pytest.fixture()
 def user_schema_cls_required_fields(team_schema_cls) -> t.Type[JSONAPISchema]:
     class UserSchema(JSONAPISchema):
-        type = 'users'
+        class Meta:
+            type_ = 'users'
 
         id = fields.String()
 

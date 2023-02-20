@@ -39,9 +39,9 @@ class RelationshipType(fields.String):
         relationship = {
             'id': fields.String(required=True),  # use self to preserve parameters defined on the initial schema
             'type': fields.String(
-                dump_default=self.related_schema_cls.type,
+                dump_default=self.related_schema_cls.Meta.type_,
                 required=True,
-                validate=validate.Equal(self.related_schema_cls.type, error='Invalid `type` specified'),
+                validate=validate.Equal(self.related_schema_cls.Meta.type_, error='Invalid `type` specified'),
             ),
         }
 

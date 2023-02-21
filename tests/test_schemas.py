@@ -569,3 +569,158 @@ def test_top_level_schema_load_required_attribute_missing(user_schema_cls_requir
             }
         )
     assert excinfo.value.messages == {'data': {'attributes': {'email': ['Missing data for required field.']}}}
+
+
+def test_user_schema_links_single(user_schema_cls_links, user_1):
+    user_schema_cls = user_schema_cls_links.get_jsonapi_resource_object_schema()
+    serialized = user_schema_cls().dump(user_1)
+    assert serialized == {
+        'id': user_1.id,
+        'type': 'users',
+        'attributes': {
+            'name': user_1.name,
+            'email': user_1.email,
+        },
+        'links': {
+            'self': f'/api/v1/users/{user_1.id}',
+        }
+    }
+
+
+def test_top_level_schema_many_links(user_schema_cls_links, user_1, user_3, team_1, team_2):
+    top_level_schema = user_schema_cls_links.get_jsonapi_top_level_schema(many=True)
+    serialized = top_level_schema().dump([user_3])
+    assert serialized == {
+        'data': [
+            {
+                'id': user_3.id,
+                'type': 'users',
+                'attributes': {
+                    'name': user_3.name,
+                    'email': user_3.email,
+                },
+                'relationships': {
+                    'referrer': {
+                        'data': {
+                            'id': user_1.id,
+                            'type': 'users'
+                        }
+                    },
+                    'teams': {
+                        'data': [
+                            {
+                                'id': team_1.id,
+                                'type': 'teams',
+                            },
+                            {
+                                'id': team_2.id,
+                                'type': 'teams',
+                            }
+                        ],
+                        'links': {
+                            'self': f'/api/v1/users/{user_3.id}/relationships/teams',
+                            'related': f'/api/v1/users/{user_3.id}/teams',
+                        }
+                    }
+                },
+                'links': {
+                    'self': f'/api/v1/users/{user_3.id}'
+                }
+            },
+        ],
+        'links': {
+            'self': '/api/v1/users/'
+        }
+    }
+
+
+
+def test_top_level_included_related_to_other_links(user_schema_cls_links, team_1, team_2, user_1, user_3, user_4):
+    top_level_schema = user_schema_cls_links.get_jsonapi_top_level_schema()
+    tls = top_level_schema(context={'to_include': {'referrer.teams'}})
+    serialized = tls.dump(user_4)
+    assert list(serialized.keys()) == ['data', 'included', 'links']
+    assert serialized['data'] == {
+                'id': user_4.id,
+                'type': 'users',
+                'attributes': {
+                    'name': user_4.name,
+                    'email': user_4.email,
+                },
+                'relationships': {
+                    'referrer': {
+                        'data': {
+                            'id': user_3.id,
+                            'type': 'users',
+                        }
+                    }
+                },
+                'links': {
+                    'self': f'/api/v1/users/{user_4.id}'
+                }
+            }
+
+    assert serialized['links'] == {'self': f'/api/v1/users/{user_4.id}'}
+
+    assert sorted(serialized['included'], key=lambda o: (o['type'], o['id'])) == [
+        {
+            'id': team_1.id,
+            'type': 'teams',
+            'attributes': {
+                'name': team_1.name,
+            },
+        },
+        {
+            'id': team_2.id,
+            'type': 'teams',
+            'attributes': {
+                'name': team_2.name,
+            },
+        },
+        {
+            'id': user_1.id,
+            'type': 'users',
+            'attributes': {
+                'name': user_1.name,
+                'email': user_1.email
+            },
+            'links': {
+                'self': f'/api/v1/users/{user_1.id}',
+            }
+        },
+        {
+            'id': user_3.id,
+            'type': 'users',
+            'attributes': {
+                'name': user_3.name,
+                'email': user_3.email,
+            },
+            'relationships': {
+                'referrer': {
+                    'data': {
+                        'id': user_1.id,
+                        'type': 'users',
+                    }
+                },
+                'teams': {
+                    'data': [
+                        {
+                            'id': team_1.id,
+                            'type': 'teams',
+                        },
+                        {
+                            'id': team_2.id,
+                            'type': 'teams',
+                        },
+                    ],
+                    'links': {
+                        'self': f'/api/v1/users/{user_3.id}/relationships/teams',
+                        'related': f'/api/v1/users/{user_3.id}/teams',
+                    }
+                }
+            },
+            'links': {
+                'self': f'/api/v1/users/{user_3.id}',
+            }
+        }
+    ]

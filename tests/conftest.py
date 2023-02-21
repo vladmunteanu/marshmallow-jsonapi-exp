@@ -109,3 +109,29 @@ def user_3(user_1, team_1, team_2):
 @pytest.fixture()
 def user_4(user_3):
     return User(id='u4', name='user-4', email='user-4@test.local', referrer=user_3)
+
+
+@pytest.fixture()
+def user_schema_cls_links(team_schema_cls) -> t.Type[JSONAPISchema]:
+    class UserSchema(JSONAPISchema):
+        class Meta:
+            type_ = 'users'
+            self_url = '/api/v1/users/{id}'
+            self_url_many = '/api/v1/users/'
+
+        id = fields.String()
+
+        # attributes
+        name = fields.String(required=True)
+        email = fields.Email(required=True)
+
+        # relationships
+        referrer = RelationshipType(related_schema='UserSchema', required=True)
+        teams = RelationshipType(
+            related_schema=team_schema_cls,
+            many=True,
+            self_url='/api/v1/users/{id}/relationships/teams',
+            related_url='/api/v1/users/{id}/teams',
+        )
+
+    return UserSchema

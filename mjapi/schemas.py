@@ -3,11 +3,12 @@ import typing as t
 from marshmallow import Schema, SchemaOpts, fields
 
 from mjapi.fields import RelationshipType
+from mjapi.links import LinksSchema, generate_url
 
 
 class ErrorObjectSchema(Schema):
     id = fields.String()
-    links = fields.Dict()  # TODO: schema for links
+    links = fields.Nested(LinksSchema)
     status = fields.String()
     code = fields.String()
     title = fields.String()
@@ -41,6 +42,7 @@ class JSONAPISchemaOpts(SchemaOpts):
 class JSONAPISchema(Schema):
     jsonapi_object_schema: t.Type[Schema] = JSONAPIObjectSchema
     error_object_schema: t.Type[Schema] = ErrorObjectSchema
+    links_object_schema: t.Type[Schema] = LinksSchema
 
     class Meta:
         """Options object for `Schema`. Takes the same options as `marshmallow.Schema.Meta` with
@@ -55,6 +57,8 @@ class JSONAPISchema(Schema):
           when a collection of resources is returned.
         """
         pass
+
+    OPTIONS_CLASS = JSONAPISchemaOpts
 
     @classmethod
     def get_jsonapi_resource_object_schema(cls) -> t.Type[Schema]:
@@ -92,6 +96,7 @@ class JSONAPISchema(Schema):
             type = schema_type_field
             attributes = fields.Nested(Schema.from_dict(schema_attributes), required=attributes_required)
             relationships = fields.Nested(Schema.from_dict(schema_relationships), required=relationships_required)
+            links = fields.Nested(cls.links_object_schema, dump_only=True)
 
             def __init__(self, *, only=None, **kwargs):
                 new_only = [] if only else None
@@ -107,6 +112,8 @@ class JSONAPISchema(Schema):
                 super().__init__(only=new_only, **kwargs)
 
             def get_attribute(self, obj: t.Any, attr: str, default: t.Any):
+                # populate parent_obj on the context
+                self.context['parent_obj'] = obj
                 if attr in ('attributes', 'relationships'):
                     return obj
                 return super().get_attribute(obj, attr, default)
@@ -120,9 +127,9 @@ class JSONAPISchema(Schema):
                 # ret.update({rel_name: rel['data']['id'] for rel_name, rel in ret.pop('relationships', {}).items()})
                 return ret
 
-            def dump(self, *args, **kwargs):
+            def dump(self, obj: t.Any, *args, **kwargs):
                 """ Overwrite to remove empty relationships. """
-                ret = super().dump(*args, **kwargs)
+                ret = super().dump(obj, *args, **kwargs)
                 many = kwargs.get('many')
                 ret = ret if many else [ret]
 
@@ -133,6 +140,10 @@ class JSONAPISchema(Schema):
                             del ret_relationships[rel_name]
                     if ret_relationships:
                         ret_item['relationships'] = ret_relationships
+                    if self.opts.self_url:
+                        ret_item['links'] = {
+                            'self': generate_url(self.opts.self_url, **obj.__dict__),
+                        }
 
                 return ret if many else ret[0]
 
@@ -158,8 +169,7 @@ class JSONAPISchema(Schema):
             meta = fields.Dict(dump_only=True)
             included = fields.List(fields.Dict(), dump_only=True)
             jsonapi = fields.Nested(cls.jsonapi_object_schema, dump_only=True)
-            # TODO schema for links
-            links = fields.Dict(keys=fields.String(), values=fields.String(), dump_only=True)
+            links = fields.Nested(cls.links_object_schema, dump_only=True)
 
             def __init__(self, *, only=None, **kwargs):
                 new_only = [] if only else None
@@ -199,6 +209,16 @@ class JSONAPISchema(Schema):
                 """ Overwrite to flatten data. """
                 ret = super().load(*args, **kwargs)
                 ret.update(**ret.pop('data', {}))
+                return ret
+
+            def dump(self, obj: t.Any, *args, **kwargs):
+                ret = super().dump(obj, *args, **kwargs)
+                if many:
+                    if cls.opts.self_url_many:
+                        ret['links'] = {'self': generate_url(cls.opts.self_url_many)}
+                else:
+                    if cls.opts.self_url:
+                        ret['links'] = {'self': generate_url(cls.opts.self_url, **obj.__dict__)}
                 return ret
 
             OPTIONS_CLASS = JSONAPISchemaOpts

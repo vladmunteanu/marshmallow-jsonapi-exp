@@ -3,7 +3,7 @@ import typing as t
 from marshmallow import Schema, SchemaOpts, fields
 
 from mjapi.fields import RelationshipType
-from mjapi.links import LinksSchema, generate_url
+from mjapi.links import LinksSchema, generate_url, resolve_params
 
 
 class ErrorObjectSchema(Schema):
@@ -124,7 +124,6 @@ class JSONAPISchema(Schema):
                 ret.update(**ret.pop('attributes', {}))
                 ret.pop('type', None)
                 ret.update(**ret.pop('relationships', {}))
-                # ret.update({rel_name: rel['data']['id'] for rel_name, rel in ret.pop('relationships', {}).items()})
                 return ret
 
             def dump(self, obj: t.Any, *args, **kwargs):
@@ -141,9 +140,12 @@ class JSONAPISchema(Schema):
                     if ret_relationships:
                         ret_item['relationships'] = ret_relationships
                     if self.opts.self_url:
-                        ret_item['links'] = {
-                            'self': generate_url(self.opts.self_url, **obj.__dict__),
-                        }
+                        self_url_kwargs = resolve_params(obj, self.opts.self_url_kwargs or {})
+                        self_url = generate_url(self.opts.self_url, **self_url_kwargs)
+                        if self_url:
+                            ret_item['links'] = {
+                                'self': self_url,
+                            }
 
                 return ret if many else ret[0]
 
@@ -218,7 +220,9 @@ class JSONAPISchema(Schema):
                         ret['links'] = {'self': generate_url(cls.opts.self_url_many)}
                 else:
                     if cls.opts.self_url:
-                        ret['links'] = {'self': generate_url(cls.opts.self_url, **obj.__dict__)}
+                        self_url = ret.get('data', {}).get('links', {}).get('self', None)
+                        if self_url:
+                            ret['links'] = {'self': self_url}
                 return ret
 
             OPTIONS_CLASS = JSONAPISchemaOpts

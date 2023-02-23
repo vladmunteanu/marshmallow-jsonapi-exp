@@ -3,7 +3,7 @@ import typing as t
 from marshmallow import Schema, SchemaOpts, fields, validate
 from marshmallow.class_registry import get_class
 
-from mjapi.links import LinksSchema, generate_url
+from mjapi.links import LinksSchema, generate_url, resolve_params
 
 if t.TYPE_CHECKING:
     from mjapi.schemas import JSONAPISchema
@@ -15,14 +15,17 @@ class RelationshipType(fields.String):
     def __init__(
             self, *, related_schema: t.Union[t.Type['JSONAPISchema'], str],
             many: bool = False, id_field: str = '',
-            related_url: str = '', self_url: str = '',
+            related_url: str = '', related_url_kwargs: t.Optional[dict] = None,
+            self_url: str = '', self_url_kwargs: t.Optional[dict] = None,
             **kwargs,
     ):
         self.related_schema = related_schema
         self.many = many
         self.id_field = id_field
         self.related_url = related_url
+        self.related_url_kwargs = related_url_kwargs
         self.self_url = self_url
+        self.self_url_kwargs = self_url_kwargs
 
         self._related_schema_cls = None
         self._related_jsonapi_schema_cls = None
@@ -102,17 +105,35 @@ class RelationshipType(fields.String):
                 ret = super().dump(*args, **kwargs)
                 rel_links = {}
                 if self.related_url:
-                    rel_links['related'] = generate_url(
-                        self.related_url,
-                        **schema_self.context['parent_obj'].__dict__,
-                    )
+                    related_url = self.get_related_url(schema_self.context['parent_obj'])
+                    if related_url:
+                        rel_links['related'] = related_url
                 if self.self_url:
-                    rel_links['self'] = generate_url(
-                        self.self_url,
-                        **schema_self.context['parent_obj'].__dict__,
-                    )
+                    self_url = self.get_self_url(schema_self.context['parent_obj'])
+                    if self_url:
+                        rel_links['self'] = self_url
                 if rel_links:
                     ret['links'] = rel_links
                 return ret
 
         return RelationshipSchema
+
+    def get_related_url(self, obj):
+        if self.related_url:
+            params = resolve_params(obj, self.related_url_kwargs)
+            non_null_params = {
+                key: value for key, value in params.items() if value is not None
+            }
+            if non_null_params:
+                return self.related_url.format(**non_null_params)
+        return None
+
+    def get_self_url(self, obj):
+        if self.self_url:
+            params = resolve_params(obj, self.self_url_kwargs)
+            non_null_params = {
+                key: value for key, value in params.items() if value is not None
+            }
+            if non_null_params:
+                return self.self_url.format(**non_null_params)
+        return None

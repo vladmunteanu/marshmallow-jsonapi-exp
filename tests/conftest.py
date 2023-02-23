@@ -117,6 +117,7 @@ def user_schema_cls_links(team_schema_cls) -> t.Type[JSONAPISchema]:
         class Meta:
             type_ = 'users'
             self_url = '/api/v1/users/{id}'
+            self_url_kwargs = {'id': '<id>'}
             self_url_many = '/api/v1/users/'
 
         id = fields.String()
@@ -131,7 +132,9 @@ def user_schema_cls_links(team_schema_cls) -> t.Type[JSONAPISchema]:
             related_schema=team_schema_cls,
             many=True,
             self_url='/api/v1/users/{id}/relationships/teams',
+            self_url_kwargs={'id': '<id>'},
             related_url='/api/v1/users/{id}/teams',
+            related_url_kwargs={'id': '<id>'},
         )
 
     return UserSchema
